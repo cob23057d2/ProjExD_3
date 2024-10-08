@@ -122,7 +122,7 @@ class Beam:
         self.rct.centerx = bird.rct.centerx + bird.rct.width * self.vx / 5
         self.rct.centery = bird.rct.centery + bird.rct.height * self.vy / 5
 
-    def update(self, screen: pg.Surface):##############
+    def update(self, screen: pg.Surface):
         """
         ビームを速度ベクトルself.vx, self.vyに基づき移動させる
         引数 screen：画面Surface
@@ -160,7 +160,7 @@ class Bomb:
         if not tate:
             self.vy *= -1
         self.rct.move_ip(self.vx, self.vy)
-        screen.blit(self.img, self.rct)
+        screen.blit(self.img, self.rct)#ボムを表示
 
 
 class Explosion:
