@@ -2,6 +2,7 @@ import os
 import random
 import sys
 import time
+import math
 import pygame as pg
 
 
@@ -74,6 +75,7 @@ class Bird:
         self.img = __class__.imgs[(+5, 0)]
         self.rct: pg.Rect = self.img.get_rect()
         self.rct.center = xy
+        self.dire = (+5, 0)  # デフォルト右向き
 
     def change_img(self, num: int, screen: pg.Surface):
         """
@@ -100,6 +102,7 @@ class Bird:
             self.rct.move_ip(-sum_mv[0], -sum_mv[1])
         if not (sum_mv[0] == 0 and sum_mv[1] == 0):
             self.img = __class__.imgs[tuple(sum_mv)]
+            self.dire = tuple(sum_mv)  # 向きを更新
         screen.blit(self.img, self.rct)
 
 
@@ -112,11 +115,12 @@ class Beam:
         ビーム画像Surfaceを生成する
         引数 bird：ビームを放つこうかとん（Birdインスタンス）
         """
-        self.img = pg.image.load("fig/beam.png")  # ビームsurface
-        self.rct = self.img.get_rect()  #ビームsurface をrectで抽出
-        self.rct.centery = bird.rct.centery
-        self.rct.left = bird.rct.right
-        self.vx, self.vy = +5, 0
+        self.vx, self.vy = bird.dire
+        angle = math.degrees(math.atan2(-self.vy, self.vx))
+        self.img = pg.transform.rotozoom(pg.image.load("fig/beam.png"), angle, 0.9)
+        self.rct = self.img.get_rect()
+        self.rct.centerx = bird.rct.centerx + bird.rct.width * self.vx / 5
+        self.rct.centery = bird.rct.centery + bird.rct.height * self.vy / 5
 
     def update(self, screen: pg.Surface):
         """
@@ -125,7 +129,7 @@ class Beam:
         """
         self.rct.move_ip(self.vx, self.vy)
         screen.blit(self.img, self.rct)
-        return check_bound(self.rct)[0]  # 横方向の判定結果を返す
+        return check_bound(self.rct) == (True, True)  # 画面内ならTrueを返す
 
 
 class Bomb:
@@ -168,10 +172,12 @@ class Explosion:
         爆発エフェクト画像Surfaceを生成する
         引数 center：爆発エフェクトの中心座標タプル
         """
-        self.imgs = [pg.image.load("fig/explosion.gif"), pg.transform.flip(pg.image.load("fig/explosion.gif"), True, True)]
+        self.imgs = [pg.image.load("fig/explosion.gif"),
+                     pg.transform.flip(pg.image.load("fig/explosion.gif"), True, False)]
         self.rct = self.imgs[0].get_rect()
         self.rct.center = center
-        self.life = 10  # 爆発時間
+        self.life = 30  # 表示時間
+        self.image_index = 0
 
     def update(self, screen: pg.Surface):
         """
@@ -180,7 +186,8 @@ class Explosion:
         """
         self.life -= 1
         if self.life > 0:
-            screen.blit(self.imgs[self.life % 2], self.rct)
+            self.image_index = (self.image_index + 1) % 2
+            screen.blit(self.imgs[self.image_index], self.rct)
         return self.life > 0
 
 
@@ -189,10 +196,10 @@ def main():
     screen = pg.display.set_mode((WIDTH, HEIGHT))    
     bg_img = pg.image.load("fig/pg_bg.jpg")
     bird = Bird((300, 200))
-    bombs = [Bomb((255,0,0),10) for i in range(NUM_OF_BOMBS)]
     beams = []  # 複数のビームを管理するリスト
+    bombs = [Bomb((255,0,0),10) for i in range(NUM_OF_BOMBS)]
     explosions = []  # 爆発エフェクトを管理するリスト
-    score = Score()  # スコアインスタンスの生成
+    score = Score()
     clock = pg.time.Clock()
     tmr = 0
     while True:
@@ -220,20 +227,21 @@ def main():
             for j, bomb in enumerate(bombs):
                 if beam is not None and bomb is not None:
                     if beam.rct.colliderect(bomb.rct):
-                        explosions.append(Explosion(bomb.rct.center))  # 爆発エフェクトを追加
                         beams[i] = None
                         bombs[j] = None
                         bird.change_img(6, screen)
-                        score.score += 1  # スコアを1点増やす
+                        score.score += 1
+                        explosions.append(Explosion(bomb.rct.center))
+                        pg.display.update()
         
-        # Noneでない要素だけを残す
-        beams = [beam for beam in beams if beam is not None]
+        # Noneでない爆弾とビームだけを残す
         bombs = [bomb for bomb in bombs if bomb is not None]
+        beams = [beam for beam in beams if beam is not None]
 
         key_lst = pg.key.get_pressed()
         bird.update(key_lst, screen)
         
-        # ビームの更新と画面外判定
+        # ビームの更新と画面外に出たビームの削除
         beams = [beam for beam in beams if beam.update(screen)]
         
         for bomb in bombs: 
@@ -242,7 +250,7 @@ def main():
         # 爆発エフェクトの更新
         explosions = [explosion for explosion in explosions if explosion.update(screen)]
         
-        score.update(screen)  # スコアを更新して描画
+        score.update(screen)
         pg.display.update()
         tmr += 1
         clock.tick(50)
